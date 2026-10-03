@@ -5,6 +5,7 @@
   "description": "Compare property listings from selected websites.",
   "minimum_chrome_version": "114",
   "permissions": ["sidePanel"],
+  "host_permissions": ["https://99acres.com/*", "https://www.99acres.com/*"],
   "background": {
     "service_worker": "background.js"
   },
@@ -16,7 +17,7 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://www.99acres.com/*"],
+      "matches": ["https://99acres.com/*", "https://www.99acres.com/*"],
       "js": ["content-scripts/99acres.js"],
       "run_at": "document_idle"
     }
