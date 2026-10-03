@@ -2,10 +2,13 @@
   <section class="search-card">
     <p class="eyebrow">PROPERTY SEARCH</p>
     <h1>Find a property across websites</h1>
-    <p class="intro">Search by property name, address, or other identifying details.</p>
+    <p class="intro">
+      Search by property name, address, or other identifying details.
+    </p>
 
-    <form (submit)="search(); $event.preventDefault()">
+    <form (submit)="$event.preventDefault(); openSites()">
       <label for="property-query">Property details</label>
+
       <div class="search-row">
         <input
           id="property-query"
@@ -14,10 +17,29 @@
           placeholder="e.g. Sunrise Apartments, Mumbai"
           [(ngModel)]="query"
         />
-        <button type="submit" [disabled]="loading || !query.trim()">
-          {{ loading ? 'Searching…' : 'Search' }}
+
+        <button
+          type="submit"
+          [disabled]="!query.trim() || selectedSiteIds.length === 0"
+        >
+          Open selected sites
         </button>
       </div>
+
+      <fieldset>
+        <legend>Websites to open</legend>
+
+        @for (site of sites; track site.id) {
+          <label>
+            <input
+              type="checkbox"
+              [checked]="selectedSiteIds.includes(site.id)"
+              (change)="toggleSite(site.id, $event)"
+            />
+            {{ site.name }}
+          </label>
+        }
+      </fieldset>
     </form>
 
     @if (error) {
@@ -27,15 +49,19 @@
     @if (results.length) {
       <section class="results">
         <h2>Sources found</h2>
+
         @for (result of results; track result.website) {
           <article class="result-card">
             <div class="result-heading">
               <div>
                 <h3>{{ result.website }}</h3>
-                <a [href]="result.url" target="_blank" rel="noopener">{{ result.url }}</a>
+                <a [href]="result.url" target="_blank" rel="noopener">
+                  {{ result.url }}
+                </a>
               </div>
               <span class="status">{{ result.status }}</span>
             </div>
+
             <pre>{{ formatJson(result.data) }}</pre>
           </article>
         }
