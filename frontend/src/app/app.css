@@ -1,0 +1,162 @@
+:host {
+  display: block;
+  min-height: 100vh;
+  color: #172033;
+  font-family: Arial, sans-serif;
+}
+
+.page {
+  min-height: 100vh;
+  padding: 64px 24px;
+  box-sizing: border-box;
+  background: linear-gradient(140deg, #eff6ff, #f8fafc 55%, #ecfeff);
+}
+
+.search-card {
+  width: min(900px, 100%);
+  margin: 0 auto;
+  padding: 40px;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgb(15 23 42 / 8%);
+  box-sizing: border-box;
+}
+
+.eyebrow {
+  margin: 0 0 12px;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(30px, 5vw, 44px);
+  letter-spacing: -0.04em;
+}
+
+.intro {
+  margin: 14px 0 32px;
+  color: #64748b;
+  line-height: 1.6;
+}
+
+label {
+  display: block;
+  margin-bottom: 9px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.search-row {
+  display: flex;
+  gap: 12px;
+}
+
+input {
+  min-width: 0;
+  flex: 1;
+  padding: 14px 16px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  font: inherit;
+}
+
+input:focus {
+  border-color: #2563eb;
+  outline: 3px solid #bfdbfe;
+}
+
+button {
+  padding: 0 22px;
+  border: 0;
+  border-radius: 10px;
+  color: white;
+  background: #2563eb;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.error {
+  margin-top: 20px;
+  color: #b91c1c;
+}
+
+.results {
+  margin-top: 40px;
+}
+
+.results h2 {
+  font-size: 20px;
+}
+
+.result-card {
+  margin-top: 14px;
+  padding: 20px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #fbfdff;
+}
+
+.result-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.result-heading h3 {
+  margin: 0 0 6px;
+}
+
+.result-heading a {
+  color: #2563eb;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.status {
+  height: fit-content;
+  padding: 5px 9px;
+  border-radius: 99px;
+  color: #166534;
+  background: #dcfce7;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+pre {
+  overflow: auto;
+  margin: 18px 0 0;
+  padding: 16px;
+  border-radius: 10px;
+  color: #dbeafe;
+  background: #0f172a;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+@media (max-width: 600px) {
+  .page {
+    padding: 24px 14px;
+  }
+
+  .search-card {
+    padding: 24px 18px;
+  }
+
+  .search-row {
+    flex-direction: column;
+  }
+
+  button {
+    min-height: 48px;
+  }
+}

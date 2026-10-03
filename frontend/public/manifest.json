@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "Property Search Assistant",
+  "version": "0.1.0",
+  "description": "Compare property listings from selected websites.",
+  "minimum_chrome_version": "114",
+  "permissions": ["sidePanel"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Open Property Search"
+  },
+  "side_panel": {
+    "default_path": "index.html"
+  }
+}
