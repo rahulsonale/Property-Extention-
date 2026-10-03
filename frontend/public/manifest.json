@@ -13,5 +13,12 @@
   },
   "side_panel": {
     "default_path": "index.html"
-  }
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.99acres.com/*"],
+      "js": ["content-scripts/99acres.js"],
+      "run_at": "document_idle"
+    }
+  ]
 }
