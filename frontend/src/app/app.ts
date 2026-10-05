@@ -1,4 +1,4 @@
-import { ChangeDetectorRef, Component, OnInit } from '@angular/core';
+import { ChangeDetectorRef, Component, OnInit, OnDestroy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
 declare const chrome: any;
@@ -18,18 +18,22 @@ type SavedSnapshot = {
   templateUrl: './app.html',
   styleUrl: './app.css',
 })
-export class App implements OnInit {
+export class App implements OnInit, OnDestroy {
+  isExtension = false;
+
   sites: Array<{
     id: string;
     name: string;
     homepage: string;
   }> = [];
 
+  private dashboardPollTimer = 0;
   selectedSiteIds: string[] = [];
-  siteTabs: Array<{ siteId: string; tabId: number; url: string }> = [];
+  siteTabs: Array<{ siteId: string; tabId: number; url: string; query?: string }> = [];
   snapshots: Record<string, SavedSnapshot> = {};
   snapshotLoadingSiteIds: string[] = [];
   snapshotErrors: Record<string, string> = {};
+  rememberedPageMessages: Record<string, string> = {};
 
   manualRates: Partial<Record<string, string>> = {};
   query = '';
@@ -57,12 +61,19 @@ export class App implements OnInit {
   constructor(private cdr: ChangeDetectorRef) {}
 
   ngOnInit(): void {
+    this.isExtension = location.protocol === 'chrome-extension:';
+
     try {
       const savedRates = localStorage.getItem('propertyManualRates');
       this.manualRates = savedRates ? JSON.parse(savedRates) : {};
     } catch {
       this.manualRates = {};
     }
+
+    void this.refreshDashboardResults();
+    this.dashboardPollTimer = window.setInterval(() => {
+      void this.refreshDashboardResults();
+    }, 3000);
 
     if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) {
       this.error = 'Open the installed extension to select websites.';
@@ -109,6 +120,24 @@ export class App implements OnInit {
     );
 
     void this.loadSavedSnapshots();
+  }
+
+  ngOnDestroy(): void {
+    window.clearInterval(this.dashboardPollTimer);
+  }
+
+  private async refreshDashboardResults(): Promise<void> {
+    try {
+      const response = await fetch('http://localhost:3000/api/results');
+
+      if (!response.ok) return;
+
+      const payload: { results?: App['results'] } = await response.json();
+      this.results = payload.results ?? [];
+      this.cdr.markForCheck();
+    } catch {
+      // Keep the current results if the local backend is temporarily unavailable.
+    }
   }
 
   saveManualRate(siteId: string, value: string): void {
@@ -338,6 +367,30 @@ export class App implements OnInit {
           this.snapshotLoadingSiteIds = this.snapshotLoadingSiteIds.filter((id) => id !== siteId);
           this.cdr.markForCheck();
         }
+      },
+    );
+  }
+
+  rememberCurrentSitePage(tab: { siteId: string; tabId: number; query?: string }): void {
+    if (!tab.query) {
+      this.rememberedPageMessages[tab.siteId] =
+        'Run a search first, then save its corrected results page.';
+      return;
+    }
+
+    chrome.runtime.sendMessage(
+      {
+        type: 'SAVE_CONFIRMED_SITE_PAGE',
+        siteId: tab.siteId,
+        tabId: tab.tabId,
+        query: tab.query,
+      },
+      (response: { ok?: boolean; error?: string }) => {
+        const runtimeError = chrome.runtime.lastError;
+        this.rememberedPageMessages[tab.siteId] = response?.ok
+          ? `Saved this 99acres results page for “${tab.query}”. Future searches for the same query will use it.`
+          : (response?.error ?? runtimeError?.message ?? 'Could not save this results page.');
+        this.cdr.markForCheck();
       },
     );
   }

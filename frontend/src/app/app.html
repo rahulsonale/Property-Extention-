@@ -1,90 +1,105 @@
-<main class="page">
-  <section class="search-card">
-    <p class="eyebrow">PROPERTY SEARCH</p>
-    <h1>Find a property across websites</h1>
-    <p class="intro">Search by property name, address, or other identifying details.</p>
+<main class="page" [class.dashboard-page]="!isExtension">
+  <section class="search-card" [class.dashboard-card]="!isExtension">
+    @if (isExtension) {
+      <p class="eyebrow">PROPERTY SEARCH</p>
+      <h1>Find a property across websites</h1>
+      <p class="intro">Search by property name, address, or other identifying details.</p>
 
-    <form (submit)="$event.preventDefault(); openSites()">
-      <label for="property-query">Property details</label>
+      <form (submit)="$event.preventDefault(); openSites()">
+        <label for="property-query">Property details</label>
 
-      <div class="search-row">
-        <input
-          id="property-query"
-          name="query"
-          type="search"
-          placeholder="e.g. Sunrise Apartments, Mumbai"
-          [(ngModel)]="query"
-        />
+        <div class="search-row">
+          <input
+            id="property-query"
+            name="query"
+            type="search"
+            placeholder="e.g. Sunrise Apartments, Mumbai"
+            [(ngModel)]="query"
+          />
 
-        <button type="submit" [disabled]="!query.trim() || selectedSiteIds.length === 0">
-          Open selected sites
-        </button>
-      </div>
+          <button type="submit" [disabled]="!query.trim() || selectedSiteIds.length === 0">
+            Open selected sites
+          </button>
+        </div>
 
-      <fieldset>
-        <legend>Websites to open</legend>
+        <fieldset>
+          <legend>Websites to open</legend>
 
-        @for (site of sites; track site.id) {
-          <label>
-            <input
-              type="checkbox"
-              [checked]="selectedSiteIds.includes(site.id)"
-              (change)="toggleSite(site.id, $event)"
-            />
-            {{ site.name }}
-          </label>
-        }
-      </fieldset>
-    </form>
-
-    @if (siteTabs.length) {
-      <section class="site-tabs">
-        <h2>Opened sites</h2>
-
-        @for (tab of siteTabs; track tab.siteId) {
-          <article class="site-tab-card">
-            <h3>{{ tab.siteId }}</h3>
-            <a [href]="tab.url" target="_blank" rel="noopener">{{ tab.url }}</a>
-
-            <button
-              type="button"
-              [disabled]="snapshotLoadingSiteIds.includes(tab.siteId)"
-              (click)="takeSnapshot(tab.siteId)"
-            >
-              {{ snapshotLoadingSiteIds.includes(tab.siteId) ? 'Capturing…' : 'Take Snapshot' }}
-            </button>
-
-            @if (snapshotErrors[tab.siteId]) {
-              <p class="error">{{ snapshotErrors[tab.siteId] }}</p>
-            }
-
-            @if (snapshots[tab.siteId]; as snapshot) {
-              <img [src]="snapshot.image" [alt]="tab.siteId + ' snapshot'" />
-              <p>Captured {{ snapshot.capturedAt }}</p>
-            }
-
-            <div class="manual-rate">
-              <label [for]="'manual-rate-' + tab.siteId">Rate per sq ft</label>
+          @for (site of sites; track site.id) {
+            <label>
               <input
-                [id]="'manual-rate-' + tab.siteId"
-                type="text"
-                placeholder="e.g. ₹8,500/sq ft"
-                [ngModel]="manualRates[tab.siteId] ?? ''"
-                (ngModelChange)="saveManualRate(tab.siteId, $event)"
+                type="checkbox"
+                [checked]="selectedSiteIds.includes(site.id)"
+                (change)="toggleSite(site.id, $event)"
               />
-            </div>
-          </article>
-        }
-      </section>
-    }
+              {{ site.name }}
+            </label>
+          }
+        </fieldset>
+      </form>
 
-    @if (error) {
-      <p class="error">{{ error }}</p>
+      @if (siteTabs.length) {
+        <section class="site-tabs">
+          <h2>Opened sites</h2>
+
+          @for (tab of siteTabs; track tab.siteId) {
+            <article class="site-tab-card">
+              <h3>{{ tab.siteId }}</h3>
+              <a [href]="tab.url" target="_blank" rel="noopener">{{ tab.url }}</a>
+
+              @if (tab.siteId === '99acres') {
+                <button type="button" (click)="rememberCurrentSitePage(tab)">
+                  Remember this 99acres page for this search
+                </button>
+                @if (rememberedPageMessages[tab.siteId]) {
+                  <p>{{ rememberedPageMessages[tab.siteId] }}</p>
+                }
+              }
+
+              <button
+                type="button"
+                [disabled]="snapshotLoadingSiteIds.includes(tab.siteId)"
+                (click)="takeSnapshot(tab.siteId)"
+              >
+                {{ snapshotLoadingSiteIds.includes(tab.siteId) ? 'Capturing…' : 'Take Snapshot' }}
+              </button>
+
+              @if (snapshotErrors[tab.siteId]) {
+                <p class="error">{{ snapshotErrors[tab.siteId] }}</p>
+              }
+
+              @if (snapshots[tab.siteId]; as snapshot) {
+                <img [src]="snapshot.image" [alt]="tab.siteId + ' snapshot'" />
+                <p>Captured {{ snapshot.capturedAt }}</p>
+              }
+
+              <div class="manual-rate">
+                <label [for]="'manual-rate-' + tab.siteId">Rate per sq ft</label>
+                <input
+                  [id]="'manual-rate-' + tab.siteId"
+                  type="text"
+                  placeholder="e.g. ₹8,500/sq ft"
+                  [ngModel]="manualRates[tab.siteId] ?? ''"
+                  (ngModelChange)="saveManualRate(tab.siteId, $event)"
+                />
+              </div>
+            </article>
+          }
+        </section>
+      }
+
+      @if (error) {
+        <p class="error">{{ error }}</p>
+      }
+    } @else {
+      <p class="eyebrow">PROPERTY RATE FINDER</p>
+      <h1>Property comparison</h1>
+      <p class="intro">Collected property rates and listing details from your selected sites.</p>
     }
 
     @if (results.length) {
-      <section class="results">
-        <h2>Sources found</h2>
+      <section class="results" [class.dashboard-results]="!isExtension">
+        <h2>{{ isExtension ? 'Sources found' : 'Comparison results' }}</h2>
 
         @for (result of results; track result.url) {
           <article class="result-card">
@@ -131,6 +146,11 @@
             </details>
           </article>
         }
+      </section>
+    } @else if (!isExtension) {
+      <section class="empty-state">
+        <h2>No results yet</h2>
+        <p>Start a search from the Property Search Assistant extension. Results will appear here.</p>
       </section>
     }
   </section>
