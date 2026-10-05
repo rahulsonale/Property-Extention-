@@ -122,6 +122,45 @@ button:disabled {
   overflow-wrap: anywhere;
 }
 
+.property-name {
+  margin: 18px 0 10px;
+  font-weight: 700;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+th,
+td {
+  padding: 11px 10px;
+  border-bottom: 1px solid #e2e8f0;
+  text-align: left;
+  white-space: nowrap;
+}
+
+th {
+  color: #475569;
+  background: #f1f5f9;
+}
+
+details {
+  margin-top: 16px;
+}
+
+summary {
+  color: #2563eb;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+}
+
 .status {
   height: fit-content;
   padding: 5px 9px;

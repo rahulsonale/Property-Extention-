@@ -56,6 +56,18 @@
 
           console.log('[Property Search Assistant] Extracted property data:');
           console.log(JSON.stringify(data, null, 2));
+          chrome.runtime.sendMessage({ type: 'PROPERTY_DATA', data }, (response) => {
+            if (chrome.runtime.lastError) {
+              console.warn(
+                '[Property Search Assistant] Could not send extracted data:',
+                chrome.runtime.lastError.message,
+              );
+            } else if (!response?.ok) {
+              console.warn(
+                '[Property Search Assistant] The extension did not save extracted data.',
+              );
+            }
+          });
           return;
         }
       } catch {

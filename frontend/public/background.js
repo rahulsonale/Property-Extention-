@@ -38,6 +38,28 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return;
   }
 
+  if (message?.type === 'GET_PROPERTY_RESULTS') {
+    chrome.storage.local.get({ propertyResults: [] }, ({ propertyResults }) => {
+      sendResponse({ results: propertyResults });
+    });
+    return true;
+  }
+
+  if (message?.type === 'PROPERTY_DATA' && message.data) {
+    chrome.storage.local.get({ propertyResults: [] }, ({ propertyResults }) => {
+      const results = Array.isArray(propertyResults) ? propertyResults : [];
+      const sourceTabId = _sender.tab?.id;
+      const next = results.filter(
+        (item) => !(item.url === message.data.url && item.sourceTabId === sourceTabId),
+      );
+      next.unshift({ ...message.data, sourceTabId, receivedAt: Date.now() });
+      chrome.storage.local.set({ propertyResults: next.slice(0, 50) }, () => {
+        sendResponse({ ok: true });
+      });
+    });
+    return true;
+  }
+
   if (message?.type !== 'OPEN_PROPERTY_SITES') {
     return;
   }
@@ -50,10 +72,21 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return;
   }
 
+  const query = String(message.query ?? '').trim();
+  const slug = query
+    .toLowerCase()
+    .replace(/[^\w\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '-');
+
+  const ninetyNineAcresSearchUrl =
+    `https://www.99acres.com/search/property/buy/${slug}` +
+    `?city=1171166&keyword=${encodeURIComponent(query)}&preference=S&res_com=R`;
+
   Promise.allSettled(
     selectedSites.map((site) =>
       chrome.tabs.create({
-        url: site.homepage,
+        url: site.id === '99acres' && query ? ninetyNineAcresSearchUrl : site.homepage,
         active: false,
       }),
     ),

@@ -26,8 +26,19 @@ export class App implements OnInit {
   results: Array<{
     website: string;
     url: string;
-    status: string;
-    data: Record<string, unknown>;
+    propertyName?: string;
+    projectId?: string | number;
+    configurations?: Array<{
+      configuration?: string;
+      area?: string | null;
+      areaType?: string | null;
+      prices?: Record<
+        string,
+        { display?: string | null; min?: number | null; max?: number | null } | null
+      >;
+    }>;
+    sourceTabId?: number;
+    receivedAt?: number;
   }> = [];
 
   constructor(private cdr: ChangeDetectorRef) {}
@@ -52,6 +63,26 @@ export class App implements OnInit {
         this.selectedSiteIds = this.sites.map((site) => site.id);
 
         this.cdr.markForCheck();
+      },
+    );
+
+    chrome.runtime.sendMessage(
+      { type: 'GET_PROPERTY_RESULTS' },
+      (response: { results?: App['results'] }) => {
+        if (!chrome.runtime.lastError) this.results = response?.results ?? [];
+        this.cdr.markForCheck();
+      },
+    );
+
+    chrome.runtime.onMessage.addListener(
+      (message: { type?: string; data?: App['results'][number] }) => {
+        if (message?.type === 'PROPERTY_DATA' && message.data) {
+          this.results = [
+            message.data,
+            ...this.results.filter((item) => item.url !== message.data?.url),
+          ];
+          this.cdr.markForCheck();
+        }
       },
     );
   }
@@ -141,5 +172,15 @@ export class App implements OnInit {
 
   formatJson(data: Record<string, unknown>): string {
     return JSON.stringify(data, null, 2);
+  }
+
+  priceLabel(
+    price: { display?: string | null; min?: number | null; max?: number | null } | null | undefined,
+  ): string {
+    if (!price) return '—';
+    if (price.display) return price.display;
+    if (price.min != null && price.max != null)
+      return price.min === price.max ? String(price.min) : `${price.min}–${price.max}`;
+    return price.min != null ? String(price.min) : price.max != null ? String(price.max) : '—';
   }
 }

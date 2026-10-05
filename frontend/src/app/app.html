@@ -50,8 +50,8 @@
       <section class="results">
         <h2>Sources found</h2>
 
-        @for (result of results; track result.website) {
-          <article class="result-card">
+      @for (result of results; track result.url) {
+        <article class="result-card">
             <div class="result-heading">
               <div>
                 <h3>{{ result.website }}</h3>
@@ -59,10 +59,36 @@
                   {{ result.url }}
                 </a>
               </div>
-              <span class="status">{{ result.status }}</span>
+              <span class="status">Captured</span>
             </div>
 
-            <pre>{{ formatJson(result.data) }}</pre>
+            <p class="property-name">{{ result.propertyName || 'Property details' }}</p>
+            @if (result.configurations?.length) {
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Configuration</th><th>Area</th><th>New booking</th><th>Resale</th><th>Rental</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (unit of result.configurations; track $index) {
+                      <tr>
+                        <td>{{ unit.configuration || '—' }}</td>
+                        <td>{{ unit.area || '—' }} {{ unit.areaType || '' }}</td>
+                        <td>{{ priceLabel(unit.prices?.['newBooking']) }}</td>
+                        <td>{{ priceLabel(unit.prices?.['resale']) }}</td>
+                        <td>{{ priceLabel(unit.prices?.['rental']) }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            }
+            <details>
+              <summary>View source data</summary>
+              <pre>{{ formatJson(result) }}</pre>
+            </details>
           </article>
         }
       </section>
