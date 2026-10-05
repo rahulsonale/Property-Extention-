@@ -26,6 +26,34 @@ const PROPERTY_SITES = [
   },
 ];
 
+async function captureSiteTab(tabId) {
+  const targetTab = await chrome.tabs.get(tabId);
+  const [activeTab] = await chrome.tabs.query({
+    active: true,
+    windowId: targetTab.windowId,
+  });
+
+  try {
+    await chrome.tabs.update(tabId, { active: true });
+    await new Promise((resolve) => setTimeout(resolve, 700));
+
+    const image = await chrome.tabs.captureVisibleTab(targetTab.windowId, {
+      format: 'png',
+    });
+
+    return {
+      image,
+      url: targetTab.url ?? '',
+      title: targetTab.title ?? '',
+      capturedAt: new Date().toISOString(),
+    };
+  } finally {
+    if (activeTab?.id != null && activeTab.id !== tabId) {
+      await chrome.tabs.update(activeTab.id, { active: true }).catch(() => {});
+    }
+  }
+}
+
 chrome.runtime.onInstalled.addListener(() => {
   chrome.sidePanel.setPanelBehavior({
     openPanelOnActionClick: true,
@@ -34,14 +62,28 @@ chrome.runtime.onInstalled.addListener(() => {
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type === 'GET_PROPERTY_SITES') {
-    sendResponse({ sites: PROPERTY_SITES });
-    return;
+    chrome.storage.local.get({ siteTabs: [] }, ({ siteTabs }) => {
+      sendResponse({ sites: PROPERTY_SITES, siteTabs });
+    });
+    return true;
   }
 
   if (message?.type === 'GET_PROPERTY_RESULTS') {
     chrome.storage.local.get({ propertyResults: [] }, ({ propertyResults }) => {
       sendResponse({ results: propertyResults });
     });
+    return true;
+  }
+
+  if (message?.type === 'CAPTURE_SITE_TAB') {
+    captureSiteTab(Number(message.tabId))
+      .then((snapshot) => sendResponse({ ok: true, ...snapshot }))
+      .catch((error) =>
+        sendResponse({
+          ok: false,
+          error: error?.message ?? 'Could not capture this site tab.',
+        }),
+      );
     return true;
   }
 
@@ -83,18 +125,43 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     `https://www.99acres.com/search/property/buy/${slug}` +
     `?city=1171166&keyword=${encodeURIComponent(query)}&preference=S&res_com=R`;
 
-  Promise.allSettled(
-    selectedSites.map((site) =>
-      chrome.tabs.create({
-        url: site.id === '99acres' && query ? ninetyNineAcresSearchUrl : site.homepage,
-        active: false,
-      }),
-    ),
-  ).then((outcomes) => {
-    const opened = outcomes.filter((item) => item.status === 'fulfilled').length;
-    const failed = outcomes.length - opened;
+  if (!query) {
+    sendResponse({ ok: false, error: 'Enter a property name or details first.' });
+    return;
+  }
 
-    sendResponse({ ok: true, opened, failed });
+  chrome.storage.local.set({ propertyResults: [], siteTabs: [] }, () => {
+    Promise.allSettled(
+      selectedSites.map((site) =>
+        chrome.tabs.create({
+          url: site.id === '99acres' ? ninetyNineAcresSearchUrl : site.homepage,
+          active: false,
+        }),
+      ),
+    ).then((outcomes) => {
+      const siteTabs = outcomes.flatMap((outcome, index) => {
+        if (outcome.status !== 'fulfilled' || outcome.value.id == null) {
+          return [];
+        }
+
+        return [
+          {
+            siteId: selectedSites[index].id,
+            tabId: outcome.value.id,
+            url: outcome.value.url ?? selectedSites[index].homepage,
+          },
+        ];
+      });
+
+      chrome.storage.local.set({ siteTabs }, () => {
+        sendResponse({
+          ok: true,
+          opened: siteTabs.length,
+          failed: outcomes.length - siteTabs.length,
+          siteTabs,
+        });
+      });
+    });
   });
 
   return true;

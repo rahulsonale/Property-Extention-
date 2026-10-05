@@ -18,6 +18,7 @@ export class App implements OnInit {
   }> = [];
 
   selectedSiteIds: string[] = [];
+  siteTabs: Array<{ siteId: string; tabId: number; url: string }> = [];
 
   query = '';
   loading = false;
@@ -57,8 +58,10 @@ export class App implements OnInit {
           name: string;
           homepage: string;
         }>;
+        siteTabs?: App['siteTabs'];
       }) => {
         this.sites = response?.sites ?? [];
+        this.siteTabs = response?.siteTabs ?? [];
 
         this.selectedSiteIds = this.sites.map((site) => site.id);
 
@@ -114,6 +117,7 @@ export class App implements OnInit {
     }
 
     this.error = '';
+    this.results = [];
 
     chrome.runtime.sendMessage(
       {
@@ -121,12 +125,19 @@ export class App implements OnInit {
         query,
         siteIds: this.selectedSiteIds,
       },
-      (response: { ok?: boolean; opened?: number; failed?: number; error?: string }) => {
+      (response: {
+        ok?: boolean;
+        opened?: number;
+        failed?: number;
+        error?: string;
+        siteTabs?: App['siteTabs'];
+      }) => {
         const runtimeError = chrome.runtime.lastError;
 
         if (runtimeError || !response?.ok) {
           this.error = response?.error ?? runtimeError?.message ?? 'Could not open the sites.';
         } else {
+          this.siteTabs = response.siteTabs ?? [];
           this.error = `Opened ${response.opened} site tab(s). Search for "${query}" on each site for now.`;
         }
 

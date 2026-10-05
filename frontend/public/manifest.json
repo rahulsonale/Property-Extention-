@@ -4,8 +4,19 @@
   "version": "0.1.0",
   "description": "Compare property listings from selected websites.",
   "minimum_chrome_version": "114",
-  "permissions": ["sidePanel", "storage"],
-  "host_permissions": ["https://99acres.com/*", "https://www.99acres.com/*"],
+  "permissions": ["sidePanel", "storage", "tabs"],
+  "host_permissions": [
+    "https://99acres.com/*",
+    "https://www.99acres.com/*",
+    "https://magicbricks.com/*",
+    "https://www.magicbricks.com/*",
+    "https://housing.com/*",
+    "https://www.housing.com/*",
+    "https://nobroker.in/*",
+    "https://www.nobroker.in/*",
+    "https://squareyards.com/*",
+    "https://www.squareyards.com/*"
+  ],
   "background": {
     "service_worker": "background.js"
   },

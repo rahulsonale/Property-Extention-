@@ -1,83 +1,77 @@
 (() => {
-  const projectId = location.pathname.match(/r(\d+)/)?.[1];
+  if (!location.pathname.includes('/search/property/')) {
+    return;
+  }
+
   let attempts = 0;
 
   const timer = setInterval(() => {
     attempts += 1;
 
-    const input = document.querySelector('#pageClickstreamObject');
+    const cards = [...document.querySelectorAll('.PseudoTupleRevamp__tupleWrapProject')];
 
-    if (input?.value) {
-      try {
-        const pageData = JSON.parse(input.value);
+    const results = cards
+      .map((card) => {
+        const text = (card.innerText || '').replace(/\s+/g, ' ').trim();
+        const title =
+          card.querySelector('.PseudoTupleRevamp__headNrating')?.innerText?.trim() ||
+          '99acres property';
 
-        const project = pageData.find(
-          (item) =>
-            item.entityType === 'PROJECT' &&
-            String(item.projectUnitId) === projectId &&
-            item.configSummary?.tuples?.length,
+        const areaMatch = text.match(
+          /\b(\d[\d,]*(?:\s*-\s*\d[\d,]*)?\s*(?:sq\.?\s*ft|sqft|sq\.?\s*m|sqm))\b/i,
         );
 
-        if (project) {
-          clearInterval(timer);
+        const areaType = /carpet/i.test(text) ? 'Carpet area' : '';
 
-          const data = {
-            website: '99acres',
-            propertyName: project.name,
-            projectId: project.projectUnitId,
-            url: location.href,
-            configurations: project.configSummary.tuples.map((unit) => {
-              const priceFor = (category) => {
-                const price = unit.categorySummary?.[category]?.price;
+        const ratePattern =
+          /(\d+\s*BHK\s+[A-Za-z/-]+)\s*₹\s*([\d,.]+(?:\s*-\s*[\d,.]+)?(?:\s*(?:L|Lac|Lacs|Cr|Crore))?)/gi;
 
-                return price
-                  ? {
-                      display: price.valueLabel ?? null,
-                      min: price.min ?? null,
-                      max: price.max ?? null,
-                    }
-                  : null;
-              };
+        const configurations = [...text.matchAll(ratePattern)].map((match) => ({
+          configuration: match[1].trim(),
+          area: areaMatch?.[1] ?? null,
+          areaType,
+          prices: {
+            newBooking: { display: `₹${match[2].trim()}` },
+            resale: null,
+            rental: null,
+          },
+        }));
 
-              return {
-                configuration: [unit.bedrooms?.label, unit.propertyType?.label]
-                  .filter(Boolean)
-                  .join(' '),
-                area: unit.area?.display ?? null,
-                areaType: unit.area?.type?.label ?? null,
-                prices: {
-                  newBooking: priceFor('newBooking'),
-                  resale: priceFor('resale'),
-                  rental: priceFor('rental'),
-                },
-              };
-            }),
-          };
+        const link = card.querySelector('a[href]');
 
-          console.log('[Property Search Assistant] Extracted property data:');
-          console.log(JSON.stringify(data, null, 2));
-          chrome.runtime.sendMessage({ type: 'PROPERTY_DATA', data }, (response) => {
-            if (chrome.runtime.lastError) {
-              console.warn(
-                '[Property Search Assistant] Could not send extracted data:',
-                chrome.runtime.lastError.message,
-              );
-            } else if (!response?.ok) {
-              console.warn(
-                '[Property Search Assistant] The extension did not save extracted data.',
-              );
-            }
-          });
-          return;
-        }
-      } catch {
-        // The page may still be filling in the data; try again.
+        return {
+          website: '99acres',
+          propertyName: title,
+          url: link?.href || location.href,
+          configurations,
+        };
+      })
+      .filter((result) => result.configurations.length > 0);
+
+    if (results.length > 0) {
+      clearInterval(timer);
+
+      for (const data of results) {
+        console.log('[Property Search Assistant] Extracted 99acres data:', data);
+
+        chrome.runtime.sendMessage({ type: 'PROPERTY_DATA', data }, (response) => {
+          if (chrome.runtime.lastError) {
+            console.warn(
+              '[Property Search Assistant] Could not send extracted data:',
+              chrome.runtime.lastError.message,
+            );
+          } else if (!response?.ok) {
+            console.warn('[Property Search Assistant] The extension did not save extracted data.');
+          }
+        });
       }
+
+      return;
     }
 
     if (attempts >= 60) {
       clearInterval(timer);
-      console.warn("[Property Search Assistant] Timed out waiting for this page's project data.");
+      console.info('[Property Search Assistant] No supported 99acres project cards were found.');
     }
   }, 500);
 })();
