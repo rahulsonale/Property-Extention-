@@ -6,6 +6,7 @@
   "minimum_chrome_version": "114",
   "permissions": ["sidePanel", "storage", "tabs"],
   "host_permissions": [
+    "<all_urls>",
     "https://99acres.com/*",
     "https://www.99acres.com/*",
     "https://magicbricks.com/*",

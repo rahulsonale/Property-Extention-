@@ -182,6 +182,47 @@ pre {
   line-height: 1.55;
 }
 
+.site-tabs {
+  margin-top: 28px;
+}
+
+.site-tabs h2 {
+  font-size: 20px;
+}
+
+.site-tab-card {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 18px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #fbfdff;
+}
+
+.site-tab-card h3,
+.site-tab-card p {
+  margin: 0;
+}
+
+.site-tab-card a {
+  color: #2563eb;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.site-tab-card button {
+  min-height: 44px;
+}
+
+.site-tab-card img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+}
+
 @media (max-width: 600px) {
   .page {
     padding: 24px 14px;

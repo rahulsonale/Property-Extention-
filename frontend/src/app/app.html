@@ -2,9 +2,7 @@
   <section class="search-card">
     <p class="eyebrow">PROPERTY SEARCH</p>
     <h1>Find a property across websites</h1>
-    <p class="intro">
-      Search by property name, address, or other identifying details.
-    </p>
+    <p class="intro">Search by property name, address, or other identifying details.</p>
 
     <form (submit)="$event.preventDefault(); openSites()">
       <label for="property-query">Property details</label>
@@ -18,10 +16,7 @@
           [(ngModel)]="query"
         />
 
-        <button
-          type="submit"
-          [disabled]="!query.trim() || selectedSiteIds.length === 0"
-        >
+        <button type="submit" [disabled]="!query.trim() || selectedSiteIds.length === 0">
           Open selected sites
         </button>
       </div>
@@ -42,6 +37,47 @@
       </fieldset>
     </form>
 
+    @if (siteTabs.length) {
+      <section class="site-tabs">
+        <h2>Opened sites</h2>
+
+        @for (tab of siteTabs; track tab.siteId) {
+          <article class="site-tab-card">
+            <h3>{{ tab.siteId }}</h3>
+            <a [href]="tab.url" target="_blank" rel="noopener">{{ tab.url }}</a>
+
+            <button
+              type="button"
+              [disabled]="snapshotLoadingSiteIds.includes(tab.siteId)"
+              (click)="takeSnapshot(tab.siteId)"
+            >
+              {{ snapshotLoadingSiteIds.includes(tab.siteId) ? 'Capturing…' : 'Take Snapshot' }}
+            </button>
+
+            @if (snapshotErrors[tab.siteId]) {
+              <p class="error">{{ snapshotErrors[tab.siteId] }}</p>
+            }
+
+            @if (snapshots[tab.siteId]; as snapshot) {
+              <img [src]="snapshot.image" [alt]="tab.siteId + ' snapshot'" />
+              <p>Captured {{ snapshot.capturedAt }}</p>
+            }
+
+            <div class="manual-rate">
+              <label [for]="'manual-rate-' + tab.siteId">Rate per sq ft</label>
+              <input
+                [id]="'manual-rate-' + tab.siteId"
+                type="text"
+                placeholder="e.g. ₹8,500/sq ft"
+                [ngModel]="manualRates[tab.siteId] ?? ''"
+                (ngModelChange)="saveManualRate(tab.siteId, $event)"
+              />
+            </div>
+          </article>
+        }
+      </section>
+    }
+
     @if (error) {
       <p class="error">{{ error }}</p>
     }
@@ -50,8 +86,8 @@
       <section class="results">
         <h2>Sources found</h2>
 
-      @for (result of results; track result.url) {
-        <article class="result-card">
+        @for (result of results; track result.url) {
+          <article class="result-card">
             <div class="result-heading">
               <div>
                 <h3>{{ result.website }}</h3>
@@ -68,7 +104,11 @@
                 <table>
                   <thead>
                     <tr>
-                      <th>Configuration</th><th>Area</th><th>New booking</th><th>Resale</th><th>Rental</th>
+                      <th>Configuration</th>
+                      <th>Area</th>
+                      <th>New booking</th>
+                      <th>Resale</th>
+                      <th>Rental</th>
                     </tr>
                   </thead>
                   <tbody>

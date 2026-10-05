@@ -60,9 +60,19 @@ chrome.runtime.onInstalled.addListener(() => {
   });
 });
 
+chrome.tabs.onRemoved.addListener((closedTabId) => {
+  chrome.storage.session.get({ siteTabs: [] }, ({ siteTabs }) => {
+    const currentTabs = Array.isArray(siteTabs) ? siteTabs : [];
+    const remainingTabs = currentTabs.filter((item) => item.tabId !== closedTabId);
+    if (remainingTabs.length !== currentTabs.length) {
+      chrome.storage.session.set({ siteTabs: remainingTabs });
+    }
+  });
+});
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type === 'GET_PROPERTY_SITES') {
-    chrome.storage.local.get({ siteTabs: [] }, ({ siteTabs }) => {
+    chrome.storage.session.get({ siteTabs: [] }, ({ siteTabs }) => {
       sendResponse({ sites: PROPERTY_SITES, siteTabs });
     });
     return true;
@@ -78,12 +88,26 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type === 'CAPTURE_SITE_TAB') {
     captureSiteTab(Number(message.tabId))
       .then((snapshot) => sendResponse({ ok: true, ...snapshot }))
-      .catch((error) =>
+      .catch((error) => {
+        const tabId = Number(message.tabId);
+        const tabIsClosed = /No tab with id/i.test(error?.message ?? '');
+
+        if (tabIsClosed) {
+          chrome.storage.session.get({ siteTabs: [] }, ({ siteTabs }) => {
+            const remainingTabs = (Array.isArray(siteTabs) ? siteTabs : []).filter(
+              (item) => item.tabId !== tabId,
+            );
+            chrome.storage.session.set({ siteTabs: remainingTabs });
+          });
+        }
+
         sendResponse({
           ok: false,
-          error: error?.message ?? 'Could not capture this site tab.',
-        }),
-      );
+          error: tabIsClosed
+            ? 'This site tab was closed. Search again to open a fresh tab before taking a snapshot.'
+            : (error?.message ?? 'Could not capture this site tab.'),
+        });
+      });
     return true;
   }
 
