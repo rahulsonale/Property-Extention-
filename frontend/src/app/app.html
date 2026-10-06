@@ -115,6 +115,33 @@
 
             <p class="property-name">{{ result.propertyName || 'Property details' }}</p>
             @if (result.configurations?.length) {
+              <h4>Listings found ({{ result.listings?.length ?? 0 }})</h4>
+
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Configuration</th>
+                      <th>Price</th>
+                      <th>Area</th>
+                      <th>Area type</th>
+                      <th>Rate per sq ft</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (listing of result.listings; track $index) {
+                      <tr>
+                        <td>{{ listing.configuration || '—' }}</td>
+                        <td>{{ listing.price || '—' }}</td>
+                        <td>{{ listing.area || '—' }}</td>
+                        <td>{{ listing.areaType || '—' }}</td>
+                        <td>{{ listing.ratePerSqFt || '—' }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+
               <div class="table-wrap">
                 <table>
                   <thead>
@@ -150,7 +177,9 @@
     } @else if (!isExtension) {
       <section class="empty-state">
         <h2>No results yet</h2>
-        <p>Start a search from the Property Search Assistant extension. Results will appear here.</p>
+        <p>
+          Start a search from the Property Search Assistant extension. Results will appear here.
+        </p>
       </section>
     }
   </section>

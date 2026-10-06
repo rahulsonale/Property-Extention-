@@ -1,77 +1,116 @@
 (() => {
-  if (!location.pathname.includes('/search/property/')) {
-    return;
-  }
+  if (!location.pathname.includes('/search/property/')) return;
+
+  const visible = (element) => {
+    const rect = element.getBoundingClientRect();
+    const style = getComputedStyle(element);
+    return (
+      rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden'
+    );
+  };
+
+  const extractProjectSummary = () => {
+    const card = document.querySelector('.PseudoTupleRevamp__tupleWrapProject');
+    if (!card || !visible(card)) return null;
+
+    const text = (card.innerText || '').replace(/\s+/g, ' ').trim();
+    const title =
+      card.querySelector('.PseudoTupleRevamp__headNrating')?.innerText?.trim() ||
+      '99acres property';
+
+    const areaMatch = text.match(
+      /\b(\d[\d,]*(?:\s*-\s*\d[\d,]*)?\s*(?:sq\.?\s*ft|sqft|sq\.?\s*m|sqm))\b/i,
+    );
+
+    const ratePattern =
+      /(\d+\s*BHK\s+[A-Za-z/-]+)\s*₹\s*([\d,.]+(?:\s*-\s*[\d,.]+)?(?:\s*(?:L|Lac|Lacs|Cr|Crore))?)/gi;
+
+    const configurations = [...text.matchAll(ratePattern)].map((match) => ({
+      configuration: match[1].trim(),
+      area: areaMatch?.[1] ?? null,
+      areaType: /carpet/i.test(text) ? 'Carpet area' : null,
+      prices: {
+        newBooking: { display: `₹${match[2].trim()}` },
+        resale: null,
+        rental: null,
+      },
+    }));
+
+    return { propertyName: title, configurations };
+  };
+
+  const extractListings = () =>
+    [...document.querySelectorAll('.tupleNew__outerTupleWrap')]
+      .filter(visible)
+      .slice(0, 10)
+      .map((card) => {
+        const text = (card.innerText || '').replace(/\s+/g, ' ').trim();
+
+        const price =
+          text.match(
+            /(?:₹|Rs\.?)\s*[\d,.]+(?:\s*-\s*[\d,.]+)?\s*(?:L|Lac|Lacs|Cr|Crore)\b/i,
+          )?.[0] ?? null;
+
+        const areaMatch = text.match(
+          /\b\d[\d,]*(?:\s*-\s*\d[\d,]*)?\s*(?:sq\.?\s*ft|sqft|sq\.?\s*m|sqm)\b/i,
+        );
+
+        const ratePerSqFt =
+          text.match(/(?:₹|Rs\.?)\s*[\d,.]+\s*\/\s*(?:sq\.?\s*ft|sqft)\b/i)?.[0] ?? null;
+
+        const configuration =
+          text.match(
+            /\b\d+\s*BHK\s+(?:Apartment|Flat|Builder Floor|Independent House|Villa|House)\b/i,
+          )?.[0] ?? null;
+
+        const areaType =
+          text.match(/\b(?:Carpet Area|Super Area|Built[\s-]?up Area|Plot Area)\b/i)?.[0] ?? null;
+
+        return {
+          configuration,
+          price,
+          area: areaMatch?.[0] ?? null,
+          areaType,
+          ratePerSqFt,
+        };
+      })
+      .filter((listing) => listing.price || listing.area || listing.ratePerSqFt);
 
   let attempts = 0;
-
   const timer = setInterval(() => {
     attempts += 1;
 
-    const cards = [...document.querySelectorAll('.PseudoTupleRevamp__tupleWrapProject')];
+    const project = extractProjectSummary();
+    const listings = extractListings();
 
-    const results = cards
-      .map((card) => {
-        const text = (card.innerText || '').replace(/\s+/g, ' ').trim();
-        const title =
-          card.querySelector('.PseudoTupleRevamp__headNrating')?.innerText?.trim() ||
-          '99acres property';
-
-        const areaMatch = text.match(
-          /\b(\d[\d,]*(?:\s*-\s*\d[\d,]*)?\s*(?:sq\.?\s*ft|sqft|sq\.?\s*m|sqm))\b/i,
-        );
-
-        const areaType = /carpet/i.test(text) ? 'Carpet area' : '';
-
-        const ratePattern =
-          /(\d+\s*BHK\s+[A-Za-z/-]+)\s*₹\s*([\d,.]+(?:\s*-\s*[\d,.]+)?(?:\s*(?:L|Lac|Lacs|Cr|Crore))?)/gi;
-
-        const configurations = [...text.matchAll(ratePattern)].map((match) => ({
-          configuration: match[1].trim(),
-          area: areaMatch?.[1] ?? null,
-          areaType,
-          prices: {
-            newBooking: { display: `₹${match[2].trim()}` },
-            resale: null,
-            rental: null,
-          },
-        }));
-
-        const link = card.querySelector('a[href]');
-
-        return {
-          website: '99acres',
-          propertyName: title,
-          url: link?.href || location.href,
-          configurations,
-        };
-      })
-      .filter((result) => result.configurations.length > 0);
-
-    if (results.length > 0) {
+    if (project || listings.length) {
       clearInterval(timer);
 
-      for (const data of results) {
-        console.log('[Property Search Assistant] Extracted 99acres data:', data);
+      const data = {
+        website: '99acres',
+        propertyName: project?.propertyName ?? '99acres search results',
+        url: location.href,
+        configurations: project?.configurations ?? [],
+        listings,
+      };
 
-        chrome.runtime.sendMessage({ type: 'PROPERTY_DATA', data }, (response) => {
-          if (chrome.runtime.lastError) {
-            console.warn(
-              '[Property Search Assistant] Could not send extracted data:',
-              chrome.runtime.lastError.message,
-            );
-          } else if (!response?.ok) {
-            console.warn('[Property Search Assistant] The extension did not save extracted data.');
-          }
-        });
-      }
+      chrome.runtime.sendMessage({ type: 'PROPERTY_DATA', data }, (response) => {
+        if (chrome.runtime.lastError) {
+          console.warn(
+            '[Property Search Assistant] Could not send extracted data:',
+            chrome.runtime.lastError.message,
+          );
+        } else if (!response?.ok) {
+          console.warn('[Property Search Assistant] The extension did not save extracted data.');
+        }
+      });
 
       return;
     }
 
     if (attempts >= 60) {
       clearInterval(timer);
-      console.info('[Property Search Assistant] No supported 99acres project cards were found.');
+      console.info('[Property Search Assistant] No supported 99acres results were found.');
     }
   }, 500);
 })();

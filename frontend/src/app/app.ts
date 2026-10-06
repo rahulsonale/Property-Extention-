@@ -54,6 +54,14 @@ export class App implements OnInit, OnDestroy {
         { display?: string | null; min?: number | null; max?: number | null } | null
       >;
     }>;
+    listings?: Array<{
+      configuration?: string | null;
+      price?: string | null;
+      area?: string | null;
+      areaType?: string | null;
+      ratePerSqFt?: string | null;
+    }>;
+
     sourceTabId?: number;
     receivedAt?: number;
   }> = [];
