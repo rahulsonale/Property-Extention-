@@ -4,6 +4,12 @@ const PROPERTY_SITES = [
   { id: 'housing', name: 'Housing.com', homepage: 'https://housing.com/' },
 ];
 
+const PROPERTY_SITE_HOSTS = {
+  '99acres': ['99acres.com', 'www.99acres.com'],
+  magicbricks: ['magicbricks.com', 'www.magicbricks.com'],
+  housing: ['housing.com', 'www.housing.com'],
+};
+
 const normalizeQuery = (value) =>
   String(value ?? '')
     .trim()
@@ -66,6 +72,17 @@ async function sendResultToDashboard(data) {
   if (!response.ok) throw new Error(`Dashboard sync failed (${response.status}).`);
 }
 
+async function clearDashboardResults() {
+  try {
+    const response = await fetch('http://localhost:3000/api/results', { method: 'DELETE' });
+    if (!response.ok) {
+      throw new Error(`Dashboard clear failed (${response.status}).`);
+    }
+  } catch (error) {
+    console.warn('[Property Search Assistant] Could not clear previous dashboard results:', error);
+  }
+}
+
 async function handleMessage(message, sender) {
   if (message?.type === 'GET_PROPERTY_SITES') {
     const { siteTabs = [] } = await getStorage(chrome.storage.local, { siteTabs: [] });
@@ -83,14 +100,17 @@ async function handleMessage(message, sender) {
     const siteId = String(message.siteId ?? '');
     const query = normalizeQuery(message.query);
     const tabId = Number(message.tabId);
-    if (siteId !== '99acres' || !query || !Number.isInteger(tabId)) {
-      throw new Error('Choose a 99acres tab and enter the search query first.');
+
+    if (!PROPERTY_SITE_HOSTS[siteId] || !query || !Number.isInteger(tabId)) {
+      throw new Error('Choose a supported site tab and enter the search query first.');
     }
 
     const tab = await chrome.tabs.get(tabId);
     const pageUrl = new URL(tab.url ?? '');
-    if (!['99acres.com', 'www.99acres.com'].includes(pageUrl.hostname)) {
-      throw new Error('The selected tab is not a 99acres page.');
+
+    if (!PROPERTY_SITE_HOSTS[siteId].includes(pageUrl.hostname)) {
+      const siteName = PROPERTY_SITES.find((site) => site.id === siteId)?.name ?? siteId;
+      throw new Error(`The selected tab is not a ${siteName} page.`);
     }
 
     const { confirmedSearchPages = [] } = await getStorage(chrome.storage.local, {
@@ -107,16 +127,19 @@ async function handleMessage(message, sender) {
       savedPage,
       ...savedPages.filter((item) => !(item.siteId === siteId && item.query === query)),
     ].slice(0, 100);
+
     await setStorage(chrome.storage.local, { confirmedSearchPages: next });
     return { ok: true, savedPage };
   }
 
   if (message?.type === 'CAPTURE_SITE_TAB') {
     const tabId = Number(message.tabId);
+
     try {
       return { ok: true, ...(await captureSiteTab(tabId)) };
     } catch (error) {
       const closed = /No tab with id/i.test(error?.message ?? '');
+
       if (closed) {
         const { siteTabs = [] } = await getStorage(chrome.storage.local, { siteTabs: [] });
         await setStorage(chrome.storage.local, {
@@ -125,6 +148,7 @@ async function handleMessage(message, sender) {
           ),
         });
       }
+
       throw new Error(
         closed
           ? 'This site tab was closed. Search again to open a fresh tab before taking a snapshot.'
@@ -145,7 +169,9 @@ async function handleMessage(message, sender) {
         (item) => !(item.url === savedData.url && item.sourceTabId === sourceTabId),
       ),
     ].slice(0, 50);
+
     await setStorage(chrome.storage.local, { propertyResults: next });
+
     try {
       await sendResultToDashboard(savedData);
       return { ok: true, dashboardSynced: true };
@@ -171,13 +197,16 @@ async function handleMessage(message, sender) {
     const fallback99acresUrl =
       `https://www.99acres.com/search/property/buy/${slug}` +
       `?city=1171166&keyword=${encodeURIComponent(query)}&preference=S&res_com=R`;
+
     const queryKey = normalizeQuery(query);
     const { confirmedSearchPages = [] } = await getStorage(chrome.storage.local, {
       confirmedSearchPages: [],
     });
     const confirmedPages = Array.isArray(confirmedSearchPages) ? confirmedSearchPages : [];
 
+    await clearDashboardResults();
     await setStorage(chrome.storage.local, { propertyResults: [], siteTabs: [] });
+
     const outcomes = await Promise.allSettled(
       selectedSites.map((site) => {
         const rememberedPage = confirmedPages.find(
@@ -185,11 +214,14 @@ async function handleMessage(message, sender) {
         );
         const url =
           rememberedPage?.url ?? (site.id === '99acres' ? fallback99acresUrl : site.homepage);
+
         return chrome.tabs.create({ url, active: false });
       }),
     );
+
     const siteTabs = outcomes.flatMap((outcome, index) => {
       if (outcome.status !== 'fulfilled' || outcome.value.id == null) return [];
+
       return [
         {
           siteId: selectedSites[index].id,
@@ -199,7 +231,9 @@ async function handleMessage(message, sender) {
         },
       ];
     });
+
     await setStorage(chrome.storage.local, { siteTabs });
+
     return {
       ok: true,
       opened: siteTabs.length,

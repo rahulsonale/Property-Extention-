@@ -395,8 +395,9 @@ export class App implements OnInit, OnDestroy {
       },
       (response: { ok?: boolean; error?: string }) => {
         const runtimeError = chrome.runtime.lastError;
+        const siteName = this.sites.find((site) => site.id === tab.siteId)?.name ?? tab.siteId;
         this.rememberedPageMessages[tab.siteId] = response?.ok
-          ? `Saved this 99acres results page for “${tab.query}”. Future searches for the same query will use it.`
+          ? `Saved this ${siteName} results page for “${tab.query}”. Future searches for the same query will use it.`
           : (response?.error ?? runtimeError?.message ?? 'Could not save this results page.');
         this.cdr.markForCheck();
       },

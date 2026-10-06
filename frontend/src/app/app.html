@@ -47,13 +47,11 @@
               <h3>{{ tab.siteId }}</h3>
               <a [href]="tab.url" target="_blank" rel="noopener">{{ tab.url }}</a>
 
-              @if (tab.siteId === '99acres') {
-                <button type="button" (click)="rememberCurrentSitePage(tab)">
-                  Remember this 99acres page for this search
-                </button>
-                @if (rememberedPageMessages[tab.siteId]) {
-                  <p>{{ rememberedPageMessages[tab.siteId] }}</p>
-                }
+              <button type="button" (click)="rememberCurrentSitePage(tab)">
+                Remember this page for this search
+              </button>
+              @if (rememberedPageMessages[tab.siteId]) {
+                <p>{{ rememberedPageMessages[tab.siteId] }}</p>
               }
 
               <button
@@ -114,9 +112,8 @@
             </div>
 
             <p class="property-name">{{ result.propertyName || 'Property details' }}</p>
-            @if (result.configurations?.length) {
+            @if (result.listings?.length) {
               <h4>Listings found ({{ result.listings?.length ?? 0 }})</h4>
-
               <div class="table-wrap">
                 <table>
                   <thead>
@@ -141,7 +138,9 @@
                   </tbody>
                 </table>
               </div>
+            }
 
+            @if (result.configurations?.length) {
               <div class="table-wrap">
                 <table>
                   <thead>
