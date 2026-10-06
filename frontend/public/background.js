@@ -12,29 +12,99 @@ const PROPERTY_SITE_HOSTS = {
 
 const normalizeQuery = (value) =>
   String(value ?? '')
-    .trim()
-    .replace(/\s+/g, ' ')
-    .toLowerCase();
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim();
+
+const slugifyLocation = (value) =>
+  String(value ?? '')
+    .normalize('NFKD')
+    .toLowerCase()
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+const parseLocationQuery = (value) => {
+  const parts = String(value ?? '')
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  if (parts.length < 2) return null;
+
+  const city = parts.pop();
+  const locality = parts.join(', ');
+
+  return locality && city ? { locality, city } : null;
+};
+
+const buildSiteSearchUrl = (siteId, query) => {
+  const location = parseLocationQuery(query);
+  if (!location) return null;
+
+  if (siteId === 'magicbricks') {
+    const url = new URL('https://www.magicbricks.com/property-for-sale/residential-real-estate');
+    url.searchParams.set('Locality', location.locality);
+    url.searchParams.set('cityName', location.city);
+    return url.href;
+  }
+
+  if (siteId === 'housing') {
+    const citySlug = slugifyLocation(location.city);
+    const localitySlug = slugifyLocation(location.locality);
+
+    if (!citySlug || !localitySlug) return null;
+
+    return `https://housing.com/in/buy/${citySlug}/${localitySlug}-gid/`;
+  }
+
+  return null;
+};
+
+const isValidSavedPage = (siteId, url) => {
+  try {
+    const pageUrl = new URL(url);
+    const supportedHost = PROPERTY_SITE_HOSTS[siteId]?.includes(pageUrl.hostname);
+
+    // Do not treat a plain homepage as a saved search/results page.
+    const isPlainHomepage =
+      pageUrl.pathname === '/' && pageUrl.search === '' && pageUrl.hash === '';
+
+    return Boolean(supportedHost) && !isPlainHomepage;
+  } catch {
+    return false;
+  }
+};
 
 const getStorage = (area, defaults) => new Promise((resolve) => area.get(defaults, resolve));
 
 const setStorage = (area, values) =>
   new Promise((resolve, reject) => {
     area.set(values, () => {
-      if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
-      else resolve();
+      if (chrome.runtime.lastError) {
+        reject(new Error(chrome.runtime.lastError.message));
+      } else {
+        resolve();
+      }
     });
   });
 
 async function captureSiteTab(tabId) {
   const targetTab = await chrome.tabs.get(tabId);
-  const [activeTab] = await chrome.tabs.query({ active: true, windowId: targetTab.windowId });
+  const [activeTab] = await chrome.tabs.query({
+    active: true,
+    windowId: targetTab.windowId,
+  });
 
   try {
     await chrome.tabs.update(tabId, { active: true });
     await new Promise((resolve) => setTimeout(resolve, 700));
+
     const currentTab = await chrome.tabs.get(tabId);
-    const image = await chrome.tabs.captureVisibleTab(targetTab.windowId, { format: 'png' });
+    const image = await chrome.tabs.captureVisibleTab(targetTab.windowId, {
+      format: 'png',
+    });
 
     return {
       image,
@@ -57,6 +127,7 @@ chrome.tabs.onRemoved.addListener((closedTabId) => {
   chrome.storage.local.get({ siteTabs: [] }, ({ siteTabs }) => {
     const currentTabs = Array.isArray(siteTabs) ? siteTabs : [];
     const remainingTabs = currentTabs.filter((item) => item.tabId !== closedTabId);
+
     if (remainingTabs.length !== currentTabs.length) {
       chrome.storage.local.set({ siteTabs: remainingTabs });
     }
@@ -69,12 +140,18 @@ async function sendResultToDashboard(data) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
-  if (!response.ok) throw new Error(`Dashboard sync failed (${response.status}).`);
+
+  if (!response.ok) {
+    throw new Error(`Dashboard sync failed (${response.status}).`);
+  }
 }
 
 async function clearDashboardResults() {
   try {
-    const response = await fetch('http://localhost:3000/api/results', { method: 'DELETE' });
+    const response = await fetch('http://localhost:3000/api/results', {
+      method: 'DELETE',
+    });
+
     if (!response.ok) {
       throw new Error(`Dashboard clear failed (${response.status}).`);
     }
@@ -85,15 +162,24 @@ async function clearDashboardResults() {
 
 async function handleMessage(message, sender) {
   if (message?.type === 'GET_PROPERTY_SITES') {
-    const { siteTabs = [] } = await getStorage(chrome.storage.local, { siteTabs: [] });
-    return { sites: PROPERTY_SITES, siteTabs: Array.isArray(siteTabs) ? siteTabs : [] };
+    const { siteTabs = [] } = await getStorage(chrome.storage.local, {
+      siteTabs: [],
+    });
+
+    return {
+      sites: PROPERTY_SITES,
+      siteTabs: Array.isArray(siteTabs) ? siteTabs : [],
+    };
   }
 
   if (message?.type === 'GET_PROPERTY_RESULTS') {
     const { propertyResults = [] } = await getStorage(chrome.storage.local, {
       propertyResults: [],
     });
-    return { results: Array.isArray(propertyResults) ? propertyResults : [] };
+
+    return {
+      results: Array.isArray(propertyResults) ? propertyResults : [],
+    };
   }
 
   if (message?.type === 'SAVE_CONFIRMED_SITE_PAGE') {
@@ -106,29 +192,47 @@ async function handleMessage(message, sender) {
     }
 
     const tab = await chrome.tabs.get(tabId);
-    const pageUrl = new URL(tab.url ?? '');
+    let pageUrl;
+
+    try {
+      pageUrl = new URL(tab.url ?? '');
+    } catch {
+      throw new Error('The selected tab does not have a valid website URL.');
+    }
 
     if (!PROPERTY_SITE_HOSTS[siteId].includes(pageUrl.hostname)) {
       const siteName = PROPERTY_SITES.find((site) => site.id === siteId)?.name ?? siteId;
+
       throw new Error(`The selected tab is not a ${siteName} page.`);
+    }
+
+    if (!isValidSavedPage(siteId, pageUrl.href)) {
+      throw new Error('Open the correct search or listings page on this site before saving it.');
     }
 
     const { confirmedSearchPages = [] } = await getStorage(chrome.storage.local, {
       confirmedSearchPages: [],
     });
     const savedPages = Array.isArray(confirmedSearchPages) ? confirmedSearchPages : [];
+
     const savedPage = {
       siteId,
       query,
       url: pageUrl.href,
       savedAt: Date.now(),
     };
+
     const next = [
       savedPage,
-      ...savedPages.filter((item) => !(item.siteId === siteId && item.query === query)),
+      ...savedPages.filter(
+        (item) => !(item.siteId === siteId && normalizeQuery(item.query) === query),
+      ),
     ].slice(0, 100);
 
-    await setStorage(chrome.storage.local, { confirmedSearchPages: next });
+    await setStorage(chrome.storage.local, {
+      confirmedSearchPages: next,
+    });
+
     return { ok: true, savedPage };
   }
 
@@ -136,12 +240,18 @@ async function handleMessage(message, sender) {
     const tabId = Number(message.tabId);
 
     try {
-      return { ok: true, ...(await captureSiteTab(tabId)) };
+      return {
+        ok: true,
+        ...(await captureSiteTab(tabId)),
+      };
     } catch (error) {
       const closed = /No tab with id/i.test(error?.message ?? '');
 
       if (closed) {
-        const { siteTabs = [] } = await getStorage(chrome.storage.local, { siteTabs: [] });
+        const { siteTabs = [] } = await getStorage(chrome.storage.local, {
+          siteTabs: [],
+        });
+
         await setStorage(chrome.storage.local, {
           siteTabs: (Array.isArray(siteTabs) ? siteTabs : []).filter(
             (item) => item.tabId !== tabId,
@@ -162,7 +272,12 @@ async function handleMessage(message, sender) {
       propertyResults: [],
     });
     const sourceTabId = sender.tab?.id;
-    const savedData = { ...message.data, sourceTabId, receivedAt: Date.now() };
+    const savedData = {
+      ...message.data,
+      sourceTabId,
+      receivedAt: Date.now(),
+    };
+
     const next = [
       savedData,
       ...(Array.isArray(propertyResults) ? propertyResults : []).filter(
@@ -177,50 +292,57 @@ async function handleMessage(message, sender) {
       return { ok: true, dashboardSynced: true };
     } catch (error) {
       console.warn('[Property Search Assistant] Could not sync result to dashboard:', error);
+
       return { ok: true, dashboardSynced: false };
     }
   }
 
   if (message?.type === 'OPEN_PROPERTY_SITES') {
     const query = String(message.query ?? '').trim();
-    if (!query) throw new Error('Enter a property name or details first.');
+
+    if (!query) {
+      throw new Error('Enter a property name or details first.');
+    }
 
     const requestedIds = new Set(message.siteIds ?? []);
     const selectedSites = PROPERTY_SITES.filter((site) => requestedIds.has(site.id));
-    if (!selectedSites.length) throw new Error('Select at least one website.');
 
-    const slug = query
-      .toLowerCase()
-      .replace(/[^\w\s-]/g, '')
-      .trim()
-      .replace(/\s+/g, '-');
-    const fallback99acresUrl =
-      `https://www.99acres.com/search/property/buy/${slug}` +
-      `?city=1171166&keyword=${encodeURIComponent(query)}&preference=S&res_com=R`;
+    if (!selectedSites.length) {
+      throw new Error('Select at least one website.');
+    }
 
     const queryKey = normalizeQuery(query);
     const { confirmedSearchPages = [] } = await getStorage(chrome.storage.local, {
       confirmedSearchPages: [],
     });
-    const confirmedPages = Array.isArray(confirmedSearchPages) ? confirmedSearchPages : [];
+    const confirmedPages = Array.isArray(confirmedSearchPages)
+      ? confirmedSearchPages.filter((item) => isValidSavedPage(item.siteId, item.url))
+      : [];
 
     await clearDashboardResults();
-    await setStorage(chrome.storage.local, { propertyResults: [], siteTabs: [] });
+    await setStorage(chrome.storage.local, {
+      propertyResults: [],
+      siteTabs: [],
+    });
 
     const outcomes = await Promise.allSettled(
       selectedSites.map((site) => {
         const rememberedPage = confirmedPages.find(
-          (item) => item.siteId === site.id && item.query === queryKey,
+          (item) => item.siteId === site.id && normalizeQuery(item.query) === queryKey,
         );
-        const url =
-          rememberedPage?.url ?? (site.id === '99acres' ? fallback99acresUrl : site.homepage);
+
+        // Use a confirmed page for this site/query, otherwise let the user
+        // search and select the correct location on the site's homepage.
+        const url = rememberedPage?.url ?? site.homepage;
 
         return chrome.tabs.create({ url, active: false });
       }),
     );
 
     const siteTabs = outcomes.flatMap((outcome, index) => {
-      if (outcome.status !== 'fulfilled' || outcome.value.id == null) return [];
+      if (outcome.status !== 'fulfilled' || outcome.value.id == null) {
+        return [];
+      }
 
       return [
         {
@@ -249,7 +371,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   handleMessage(message, sender)
     .then((response) => sendResponse(response))
     .catch((error) =>
-      sendResponse({ ok: false, error: error?.message ?? 'Extension request failed.' }),
+      sendResponse({
+        ok: false,
+        error: error?.message ?? 'Extension request failed.',
+      }),
     );
+
   return true;
 });
