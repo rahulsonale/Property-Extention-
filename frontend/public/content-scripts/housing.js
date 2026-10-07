@@ -9,40 +9,54 @@
     );
   };
 
-  let attempts = 0;
+  const extractListings = async (cards) => {
+    const initialScrollY = window.scrollY;
+    const listings = [];
 
-  const timer = setInterval(() => {
+    for (let index = 0; index < cards.length; index += 1) {
+      const card = cards[index];
+      const text = (card.innerText || '').replace(/\s+/g, ' ').trim();
+      const listing = {
+        id: `housing-${index}`,
+        configuration:
+          text.match(
+            /\b\d+\s*BHK\s+(?:Apartment|Flat|Independent House|Independent Floor|Villa|Builder Floor|House)\b/i,
+          )?.[0] ?? null,
+        price: text.match(/(?:₹|Rs\.?)\s*[\d,.]+\s*(?:L|Lac|Lacs|Cr|Crore)\b/i)?.[0] ?? null,
+        area:
+          text.match(
+            /\b\d[\d,]*(?:\s*-\s*\d[\d,]*)?\s*(?:sq\.?\s*ft|sqft|sq\.?\s*m|sqm)\b/i,
+          )?.[0] ?? null,
+        areaType:
+          text.match(/\b(?:Carpet|Built[\s-]?up|Super[\s-]?built[\s-]?up|Super)\s+area\b/i)?.[0] ??
+          null,
+        ratePerSqFt:
+          text.match(/(?:₹|Rs\.?)\s*[\d,.]+\s*k?\s*(?:\/|per)\s*sq\.?\s*ft\b/i)?.[0] ?? null,
+      };
+
+      if (listing.price || listing.area || listing.ratePerSqFt) {
+        listing.evidence = await globalThis.captureListingEvidence(card);
+        listings.push(listing);
+      }
+    }
+
+    window.scrollTo({ top: initialScrollY, behavior: 'instant' });
+    return listings;
+  };
+
+  let attempts = 0;
+  let extractionStarted = false;
+  const timer = setInterval(async () => {
+    if (extractionStarted) return;
     attempts += 1;
 
     const cards = [...document.querySelectorAll('.T_cardV1Style')].filter(isVisible).slice(0, 10);
-
-    const listings = cards
-      .map((card) => {
-        const text = (card.innerText || '').replace(/\s+/g, ' ').trim();
-
-        return {
-          configuration:
-            text.match(
-              /\b\d+\s*BHK\s+(?:Apartment|Flat|Independent House|Independent Floor|Villa|Builder Floor|House)\b/i,
-            )?.[0] ?? null,
-          price: text.match(/(?:₹|Rs\.?)\s*[\d,.]+\s*(?:L|Lac|Lacs|Cr|Crore)\b/i)?.[0] ?? null,
-          area:
-            text.match(
-              /\b\d[\d,]*(?:\s*-\s*\d[\d,]*)?\s*(?:sq\.?\s*ft|sqft|sq\.?\s*m|sqm)\b/i,
-            )?.[0] ?? null,
-          areaType:
-            text.match(
-              /\b(?:Carpet|Built[\s-]?up|Super[\s-]?built[\s-]?up|Super)\s+area\b/i,
-            )?.[0] ?? null,
-          ratePerSqFt:
-            text.match(/(?:₹|Rs\.?)\s*[\d,.]+\s*k?\s*(?:\/|per)\s*sq\.?\s*ft\b/i)?.[0] ?? null,
-        };
-      })
-      .filter((listing) => listing.price || listing.area || listing.ratePerSqFt);
-
-    if (listings.length) {
+    if (cards.length) {
+      extractionStarted = true;
       clearInterval(timer);
+      const listings = await extractListings(cards);
 
+      if (!listings.length) return;
       const data = {
         website: 'Housing.com',
         propertyName: 'Housing.com project listings',
@@ -52,23 +66,17 @@
 
       chrome.runtime.sendMessage({ type: 'PROPERTY_DATA', data }, (response) => {
         if (chrome.runtime.lastError) {
-          console.warn(
-            '[Property Search Assistant] Could not send Housing.com data:',
-            chrome.runtime.lastError.message,
-          );
+          console.warn('[Property Search Assistant] Could not send Housing.com data:', chrome.runtime.lastError.message);
         } else if (!response?.ok) {
           console.warn('[Property Search Assistant] Housing.com data was not saved.');
         }
       });
-
       return;
     }
 
     if (attempts >= 60) {
       clearInterval(timer);
-      console.info(
-        '[Property Search Assistant] No supported Housing.com property cards were found.',
-      );
+      console.info('[Property Search Assistant] No supported Housing.com property cards were found.');
     }
   }, 500);
 })();

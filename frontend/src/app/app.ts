@@ -1,3 +1,4 @@
+import { DatePipe } from '@angular/common';
 import { ChangeDetectorRef, Component, OnInit, OnDestroy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
@@ -12,7 +13,7 @@ type SavedSnapshot = {
 };
 
 @Component({
-  imports: [FormsModule],
+  imports: [DatePipe, FormsModule],
   selector: 'app-root',
   standalone: true,
   templateUrl: './app.html',
@@ -55,11 +56,13 @@ export class App implements OnInit, OnDestroy {
       >;
     }>;
     listings?: Array<{
+      id?: string;
       configuration?: string | null;
       price?: string | null;
       area?: string | null;
       areaType?: string | null;
       ratePerSqFt?: string | null;
+      evidence?: { image?: string; url?: string; capturedAt?: string; error?: string } | null;
     }>;
 
     sourceTabId?: number;

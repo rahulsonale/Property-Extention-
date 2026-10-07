@@ -123,6 +123,7 @@
                       <th>Area</th>
                       <th>Area type</th>
                       <th>Rate per sq ft</th>
+                      <th>Source proof</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -133,6 +134,22 @@
                         <td>{{ listing.area || '—' }}</td>
                         <td>{{ listing.areaType || '—' }}</td>
                         <td>{{ listing.ratePerSqFt || '—' }}</td>
+                        <td>
+                          @if (listing.evidence?.image) {
+                            <details class="listing-proof">
+                              <summary>View snapshot</summary>
+                              <img [src]="listing.evidence?.image" alt="Source listing snapshot" />
+                              @if (listing.evidence?.capturedAt) {
+                                <small>Captured {{ listing.evidence?.capturedAt | date: 'medium' }}</small>
+                              }
+                              @if (listing.evidence?.url) {
+                                <a [href]="listing.evidence?.url" target="_blank" rel="noopener">Open source listing</a>
+                              }
+                            </details>
+                          } @else {
+                            <span>Unavailable{{ listing.evidence?.error ? ': ' + listing.evidence?.error : '' }}</span>
+                          }
+                        </td>
                       </tr>
                     }
                   </tbody>

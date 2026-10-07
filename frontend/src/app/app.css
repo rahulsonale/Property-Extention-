@@ -181,6 +181,26 @@ td {
   white-space: nowrap;
 }
 
+.listing-proof {
+  min-width: 130px;
+}
+
+.listing-proof img {
+  display: block;
+  width: min(360px, 65vw);
+  height: auto;
+  margin-top: 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+}
+
+.listing-proof small,
+.listing-proof a {
+  display: block;
+  margin-top: 6px;
+  white-space: normal;
+}
+
 th {
   color: #475569;
   background: #f1f5f9;

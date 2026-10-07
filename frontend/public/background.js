@@ -119,6 +119,57 @@ async function captureSiteTab(tabId) {
   }
 }
 
+let listingCaptureQueue = Promise.resolve();
+const listingCaptureOriginalTabs = new Map();
+const listingCaptureRestoreTimers = new Map();
+const listingCaptureLastAt = new Map();
+
+function captureListingTab(tabId) {
+  const capture = listingCaptureQueue.then(async () => {
+    const targetTab = await chrome.tabs.get(tabId);
+    const windowId = targetTab.windowId;
+    const [activeTab] = await chrome.tabs.query({ active: true, windowId });
+
+    if (!listingCaptureOriginalTabs.has(windowId) && activeTab?.id != null) {
+      listingCaptureOriginalTabs.set(windowId, activeTab.id);
+    }
+
+    if (activeTab?.id !== tabId) {
+      await chrome.tabs.update(tabId, { active: true });
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    }
+
+    const lastCapturedAt = listingCaptureLastAt.get(windowId) ?? 0;
+    const waitMs = Math.max(0, 600 - (Date.now() - lastCapturedAt));
+    if (waitMs) await new Promise((resolve) => setTimeout(resolve, waitMs));
+
+    const currentTab = await chrome.tabs.get(tabId);
+    const image = await chrome.tabs.captureVisibleTab(windowId, { format: 'png' });
+    listingCaptureLastAt.set(windowId, Date.now());
+
+    const previousTimer = listingCaptureRestoreTimers.get(windowId);
+    if (previousTimer) clearTimeout(previousTimer);
+    const timer = setTimeout(() => {
+      const originalTabId = listingCaptureOriginalTabs.get(windowId);
+      if (originalTabId != null && originalTabId !== tabId) {
+        chrome.tabs.update(originalTabId, { active: true }).catch(() => {});
+      }
+      listingCaptureOriginalTabs.delete(windowId);
+      listingCaptureRestoreTimers.delete(windowId);
+    }, 1800);
+    listingCaptureRestoreTimers.set(windowId, timer);
+
+    return {
+      image,
+      url: currentTab.url ?? targetTab.url ?? '',
+      title: currentTab.title ?? targetTab.title ?? '',
+      capturedAt: new Date().toISOString(),
+    };
+  });
+  listingCaptureQueue = capture.catch(() => {});
+  return capture;
+}
+
 chrome.runtime.onInstalled.addListener(() => {
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
 });
@@ -267,15 +318,28 @@ async function handleMessage(message, sender) {
     }
   }
 
+  if (message?.type === 'CAPTURE_LISTING_VIEWPORT') {
+    const tabId = sender.tab?.id;
+    if (tabId == null) throw new Error('Could not identify the listing tab.');
+
+    return { ok: true, ...(await captureListingTab(tabId)) };
+  }
+
   if (message?.type === 'PROPERTY_DATA' && message.data) {
     const { propertyResults = [] } = await getStorage(chrome.storage.local, {
       propertyResults: [],
     });
     const sourceTabId = sender.tab?.id;
-    const savedData = {
+    const dashboardData = {
       ...message.data,
       sourceTabId,
       receivedAt: Date.now(),
+    };
+    const savedData = {
+      ...dashboardData,
+      listings: Array.isArray(dashboardData.listings)
+        ? dashboardData.listings.map(({ evidence, ...listing }) => listing)
+        : dashboardData.listings,
     };
 
     const next = [
@@ -288,7 +352,7 @@ async function handleMessage(message, sender) {
     await setStorage(chrome.storage.local, { propertyResults: next });
 
     try {
-      await sendResultToDashboard(savedData);
+      await sendResultToDashboard(dashboardData);
       return { ok: true, dashboardSynced: true };
     } catch (error) {
       console.warn('[Property Search Assistant] Could not sync result to dashboard:', error);
@@ -331,9 +395,8 @@ async function handleMessage(message, sender) {
           (item) => item.siteId === site.id && normalizeQuery(item.query) === queryKey,
         );
 
-        // Use a confirmed page for this site/query, otherwise let the user
-        // search and select the correct location on the site's homepage.
-        const url = rememberedPage?.url ?? site.homepage;
+        const generatedUrl = buildSiteSearchUrl(site.id, query);
+        const url = rememberedPage?.url ?? generatedUrl ?? site.homepage;
 
         return chrome.tabs.create({ url, active: false });
       }),

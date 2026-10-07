@@ -39,52 +39,69 @@
     return { propertyName: title, configurations };
   };
 
-  const extractListings = () =>
-    [...document.querySelectorAll('.tupleNew__outerTupleWrap')]
+  const extractListings = async () => {
+    const initialScrollY = window.scrollY;
+    const cards = [...document.querySelectorAll('.tupleNew__outerTupleWrap')]
       .filter(visible)
-      .slice(0, 10)
-      .map((card) => {
-        const text = (card.innerText || '').replace(/\s+/g, ' ').trim();
+      .slice(0, 10);
+    const listings = [];
 
-        const price =
-          text.match(
-            /(?:₹|Rs\.?)\s*[\d,.]+(?:\s*-\s*[\d,.]+)?\s*(?:L|Lac|Lacs|Cr|Crore)\b/i,
-          )?.[0] ?? null;
+    for (let index = 0; index < cards.length; index += 1) {
+      const card = cards[index];
+      const text = (card.innerText || '').replace(/\s+/g, ' ').trim();
 
-        const areaMatch = text.match(
-          /\b\d[\d,]*(?:\s*-\s*\d[\d,]*)?\s*(?:sq\.?\s*ft|sqft|sq\.?\s*m|sqm)\b/i,
-        );
+      const price =
+        text.match(
+          /(?:₹|Rs\.?)\s*[\d,.]+(?:\s*-\s*[\d,.]+)?\s*(?:L|Lac|Lacs|Cr|Crore)\b/i,
+        )?.[0] ?? null;
 
-        const ratePerSqFt =
-          text.match(/(?:₹|Rs\.?)\s*[\d,.]+\s*\/\s*(?:sq\.?\s*ft|sqft)\b/i)?.[0] ?? null;
+      const areaMatch = text.match(
+        /\b\d[\d,]*(?:\s*-\s*\d[\d,]*)?\s*(?:sq\.?\s*ft|sqft|sq\.?\s*m|sqm)\b/i,
+      );
 
-        const configuration =
-          text.match(
-            /\b\d+\s*BHK\s+(?:Apartment|Flat|Builder Floor|Independent House|Villa|House)\b/i,
-          )?.[0] ?? null;
+      const ratePerSqFt =
+        text.match(/(?:₹|Rs\.?)\s*[\d,.]+\s*\/\s*(?:sq\.?\s*ft|sqft)\b/i)?.[0] ?? null;
 
-        const areaType =
-          text.match(/\b(?:Carpet Area|Super Area|Built[\s-]?up Area|Plot Area)\b/i)?.[0] ?? null;
+      const configuration =
+        text.match(
+          /\b\d+\s*BHK\s+(?:Apartment|Flat|Builder Floor|Independent House|Villa|House)\b/i,
+        )?.[0] ?? null;
 
-        return {
-          configuration,
-          price,
-          area: areaMatch?.[0] ?? null,
-          areaType,
-          ratePerSqFt,
-        };
-      })
-      .filter((listing) => listing.price || listing.area || listing.ratePerSqFt);
+      const areaType =
+        text.match(/\b(?:Carpet Area|Super Area|Built[\s-]?up Area|Plot Area)\b/i)?.[0] ?? null;
+
+      const listing = {
+        id: `99acres-${index}-${btoa(unescape(encodeURIComponent(text.slice(0, 80))))}`,
+        configuration,
+        price,
+        area: areaMatch?.[0] ?? null,
+        areaType,
+        ratePerSqFt,
+      };
+
+      if (listing.price || listing.area || listing.ratePerSqFt) {
+        listing.evidence = await globalThis.captureListingEvidence(card);
+        listings.push(listing);
+      }
+    }
+
+    window.scrollTo({ top: initialScrollY, behavior: 'instant' });
+    return listings;
+  };
 
   let attempts = 0;
-  const timer = setInterval(() => {
+  let extractionStarted = false;
+  const timer = setInterval(async () => {
+    if (extractionStarted) return;
     attempts += 1;
 
     const project = extractProjectSummary();
-    const listings = extractListings();
+    const hasListings = [...document.querySelectorAll('.tupleNew__outerTupleWrap')].some(visible);
 
-    if (project || listings.length) {
+    if (project || hasListings) {
+      extractionStarted = true;
       clearInterval(timer);
+      const listings = await extractListings();
 
       const data = {
         website: '99acres',
