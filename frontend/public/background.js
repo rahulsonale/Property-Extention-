@@ -2,12 +2,16 @@ const PROPERTY_SITES = [
   { id: '99acres', name: '99acres', homepage: 'https://www.99acres.com/' },
   { id: 'magicbricks', name: 'Magicbricks', homepage: 'https://www.magicbricks.com/' },
   { id: 'housing', name: 'Housing.com', homepage: 'https://housing.com/' },
+  { id: 'nobroker', name: 'NoBroker', homepage: 'https://www.nobroker.in/' },
+  { id: 'squareyards', name: 'SquareYards', homepage: 'https://www.squareyards.com/sale' },
 ];
 
 const PROPERTY_SITE_HOSTS = {
   '99acres': ['99acres.com', 'www.99acres.com'],
   magicbricks: ['magicbricks.com', 'www.magicbricks.com'],
   housing: ['housing.com', 'www.housing.com'],
+  nobroker: ['nobroker.in', 'www.nobroker.in'],
+  squareyards: ['squareyards.com', 'www.squareyards.com'],
 };
 
 const normalizeQuery = (value) =>
@@ -24,6 +28,11 @@ const slugifyLocation = (value) =>
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
+
+const canonicalCitySlug = (value) => {
+  const slug = slugifyLocation(value);
+  return slug === 'bangalore' ? 'bengaluru' : slug;
+};
 
 const parseLocationQuery = (value) => {
   const parts = String(value ?? '')
@@ -51,12 +60,27 @@ const buildSiteSearchUrl = (siteId, query) => {
   }
 
   if (siteId === 'housing') {
+    const citySlug = canonicalCitySlug(location.city);
+
+    if (!citySlug) return null;
+
+    return `https://housing.com/in/buy/${citySlug}/`;
+  }
+
+  if (siteId === 'nobroker') {
+    const citySlug = slugifyLocation(location.city).replace(/-/g, '_');
+
+    if (!citySlug) return null;
+
+    return `https://www.nobroker.in/flats-for-sale-in-${citySlug}_${citySlug}`;
+  }
+
+  if (siteId === 'squareyards') {
     const citySlug = slugifyLocation(location.city);
-    const localitySlug = slugifyLocation(location.locality);
 
-    if (!citySlug || !localitySlug) return null;
+    if (!citySlug) return null;
 
-    return `https://housing.com/in/buy/${citySlug}/${localitySlug}-gid/`;
+    return `https://www.squareyards.com/sale/property-for-sale-in-${citySlug}`;
   }
 
   return null;
@@ -211,6 +235,16 @@ async function clearDashboardResults() {
   }
 }
 
+async function sendDashboardProgress(progress) {
+  const response = await fetch('http://localhost:3000/api/results/progress', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(progress),
+  });
+
+  if (!response.ok) throw new Error(`Progress update failed (${response.status}).`);
+}
+
 async function handleMessage(message, sender) {
   if (message?.type === 'GET_PROPERTY_SITES') {
     const { siteTabs = [] } = await getStorage(chrome.storage.local, {
@@ -325,6 +359,27 @@ async function handleMessage(message, sender) {
     return { ok: true, ...(await captureListingTab(tabId)) };
   }
 
+  if (
+    message?.type === 'LISTING_CAPTURE_PROGRESS' &&
+    ['housing', 'magicbricks', 'nobroker', 'squareyards'].includes(message.siteId)
+  ) {
+    const progress = {
+      siteId: message.siteId,
+      status: message.status,
+      current: message.current ?? 0,
+      total: message.total ?? 0,
+      message: message.message,
+    };
+
+    try {
+      await sendDashboardProgress(progress);
+    } catch (error) {
+      console.warn('[Property Search Assistant] Could not update dashboard progress:', error);
+    }
+
+    return { ok: true };
+  }
+
   if (message?.type === 'PROPERTY_DATA' && message.data) {
     const { propertyResults = [] } = await getStorage(chrome.storage.local, {
       propertyResults: [],
@@ -384,6 +439,20 @@ async function handleMessage(message, sender) {
       : [];
 
     await clearDashboardResults();
+    const progressSite = selectedSites.find((site) =>
+      ['housing', 'magicbricks', 'nobroker', 'squareyards'].includes(site.id),
+    );
+
+    if (progressSite) {
+      await sendDashboardProgress({
+        siteId: progressSite.id,
+        status: 'waiting',
+        current: 0,
+        total: 0,
+      }).catch((error) =>
+        console.warn('[Property Search Assistant] Could not initialize dashboard progress:', error),
+      );
+    }
     await setStorage(chrome.storage.local, {
       propertyResults: [],
       siteTabs: [],

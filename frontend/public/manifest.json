@@ -42,6 +42,16 @@
       "matches": ["https://housing.com/*", "https://www.housing.com/*"],
       "js": ["content-scripts/listing-proof.js", "content-scripts/housing.js"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://nobroker.in/*", "https://www.nobroker.in/*"],
+      "js": ["content-scripts/listing-proof.js", "content-scripts/nobroker.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://squareyards.com/*", "https://www.squareyards.com/*"],
+      "js": ["content-scripts/listing-proof.js", "content-scripts/squareyards.js"],
+      "run_at": "document_idle"
     }
   ]
 }

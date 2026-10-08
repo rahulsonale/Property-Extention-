@@ -38,6 +38,24 @@
         </fieldset>
       </form>
 
+      @if (captureProgress; as progress) {
+        <div class="capture-progress" [class.capture-complete]="progress.status === 'complete'" role="status" aria-live="polite">
+          @if (progress.status === 'waiting') {
+            <span>{{ captureProgressSiteName }} is opening. We’ll collect its listings and row snapshots shortly.</span>
+          } @else if (progress.status === 'capturing') {
+            <span>
+              Fetching {{ captureProgressSiteName }} listings and snapshots
+              @if (progress.total) { — {{ progress.current }} of {{ progress.total }} }
+              . The browser may briefly switch to the {{ captureProgressSiteName }} tab while captures run.
+            </span>
+          } @else if (progress.status === 'complete') {
+            <span>{{ captureProgressSiteName }} capture finished. Review the listing table and its row snapshots on the dashboard.</span>
+          } @else {
+            <span>{{ progress.message || captureProgressSiteName + ' capture could not finish.' }}</span>
+          }
+        </div>
+      }
+
       @if (siteTabs.length) {
         <section class="site-tabs">
           <h2>Opened sites</h2>
@@ -93,6 +111,23 @@
       <p class="eyebrow">PROPERTY RATE FINDER</p>
       <h1>Property comparison</h1>
       <p class="intro">Collected property rates and listing details from your selected sites.</p>
+      @if (captureProgress; as progress) {
+        <div class="capture-progress" [class.capture-complete]="progress.status === 'complete'" role="status" aria-live="polite">
+          @if (progress.status === 'waiting') {
+            <span>Opening {{ captureProgressSiteName }} and preparing its listing snapshots…</span>
+          } @else if (progress.status === 'capturing') {
+            <span>
+              Fetching {{ captureProgressSiteName }} listing data and snapshots
+              @if (progress.total) { — {{ progress.current }} of {{ progress.total }} }
+              . The browser may briefly switch to the {{ captureProgressSiteName }} tab while captures run.
+            </span>
+          } @else if (progress.status === 'complete') {
+            <span>{{ captureProgressSiteName }} capture finished. The listing table and row snapshots are ready below.</span>
+          } @else {
+            <span>{{ progress.message || captureProgressSiteName + ' capture could not finish.' }}</span>
+          }
+        </div>
+      }
     }
 
     @if (results.length) {

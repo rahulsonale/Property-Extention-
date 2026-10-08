@@ -20,6 +20,18 @@ type SavedSnapshot = {
   styleUrl: './app.css',
 })
 export class App implements OnInit, OnDestroy {
+  get captureProgressSiteName(): string {
+    switch (this.captureProgress?.siteId) {
+      case 'magicbricks':
+        return 'Magicbricks';
+      case 'nobroker':
+        return 'NoBroker';
+      case 'squareyards':
+        return 'SquareYards';
+      default:
+        return 'Housing.com';
+    }
+  }
   isExtension = false;
 
   sites: Array<{
@@ -29,12 +41,20 @@ export class App implements OnInit, OnDestroy {
   }> = [];
 
   private dashboardPollTimer = 0;
+  private dashboardProgressPollTimer = 0;
   selectedSiteIds: string[] = [];
   siteTabs: Array<{ siteId: string; tabId: number; url: string; query?: string }> = [];
   snapshots: Record<string, SavedSnapshot> = {};
   snapshotLoadingSiteIds: string[] = [];
   snapshotErrors: Record<string, string> = {};
   rememberedPageMessages: Record<string, string> = {};
+  captureProgress: {
+    siteId: string;
+    status: 'waiting' | 'capturing' | 'complete' | 'error';
+    current: number;
+    total: number;
+    message?: string;
+  } | null = null;
 
   manualRates: Partial<Record<string, string>> = {};
   query = '';
@@ -85,6 +105,10 @@ export class App implements OnInit, OnDestroy {
     this.dashboardPollTimer = window.setInterval(() => {
       void this.refreshDashboardResults();
     }, 3000);
+    void this.refreshDashboardProgress();
+    this.dashboardProgressPollTimer = window.setInterval(() => {
+      void this.refreshDashboardProgress();
+    }, 800);
 
     if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) {
       this.error = 'Open the installed extension to select websites.';
@@ -104,7 +128,9 @@ export class App implements OnInit, OnDestroy {
         this.sites = response?.sites ?? [];
         this.siteTabs = response?.siteTabs ?? [];
 
-        this.selectedSiteIds = this.sites.map((site) => site.id);
+        this.selectedSiteIds = this.sites
+          .filter((site) => site.id !== '99acres')
+          .map((site) => site.id);
 
         this.cdr.markForCheck();
       },
@@ -119,7 +145,30 @@ export class App implements OnInit, OnDestroy {
     );
 
     chrome.runtime.onMessage.addListener(
-      (message: { type?: string; data?: App['results'][number] }) => {
+      (message: {
+        type?: string;
+        data?: App['results'][number];
+        siteId?: string;
+        status?: 'waiting' | 'capturing' | 'complete' | 'error';
+        current?: number;
+        total?: number;
+        message?: string;
+      }) => {
+        if (
+          message?.type === 'LISTING_CAPTURE_PROGRESS' &&
+          message.siteId !== undefined &&
+          ['housing', 'magicbricks', 'nobroker', 'squareyards'].includes(message.siteId)
+        ) {
+          this.captureProgress = {
+            siteId: message.siteId,
+            status: message.status ?? 'capturing',
+            current: message.current ?? 0,
+            total: message.total ?? 0,
+            message: message.message,
+          };
+          this.cdr.markForCheck();
+        }
+
         if (message?.type === 'PROPERTY_DATA' && message.data) {
           this.results = [
             message.data,
@@ -135,6 +184,20 @@ export class App implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     window.clearInterval(this.dashboardPollTimer);
+    window.clearInterval(this.dashboardProgressPollTimer);
+  }
+
+  private async refreshDashboardProgress(): Promise<void> {
+    try {
+      const response = await fetch('http://localhost:3000/api/results/progress');
+      if (!response.ok) return;
+
+      const payload: { progress?: App['captureProgress'] } = await response.json();
+      this.captureProgress = payload.progress ?? null;
+      this.cdr.markForCheck();
+    } catch {
+      // The dashboard can keep showing results if progress polling is unavailable.
+    }
   }
 
   private async refreshDashboardResults(): Promise<void> {
@@ -184,6 +247,12 @@ export class App implements OnInit, OnDestroy {
 
     this.error = '';
     this.results = [];
+    const progressSiteId = this.selectedSiteIds.find((siteId) =>
+      ['housing', 'magicbricks', 'nobroker', 'squareyards'].includes(siteId),
+    );
+    this.captureProgress = progressSiteId
+      ? { siteId: progressSiteId, status: 'waiting', current: 0, total: 0 }
+      : null;
 
     chrome.runtime.sendMessage(
       {

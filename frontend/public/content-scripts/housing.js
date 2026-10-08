@@ -35,6 +35,13 @@
       };
 
       if (listing.price || listing.area || listing.ratePerSqFt) {
+        chrome.runtime.sendMessage({
+          type: 'LISTING_CAPTURE_PROGRESS',
+          siteId: 'housing',
+          status: 'capturing',
+          current: listings.length + 1,
+          total: cards.length,
+        });
         listing.evidence = await globalThis.captureListingEvidence(card);
         listings.push(listing);
       }
@@ -54,9 +61,34 @@
     if (cards.length) {
       extractionStarted = true;
       clearInterval(timer);
+      chrome.runtime.sendMessage({
+        type: 'LISTING_CAPTURE_PROGRESS',
+        siteId: 'housing',
+        status: 'capturing',
+        current: 0,
+        total: cards.length,
+      });
       const listings = await extractListings(cards);
 
-      if (!listings.length) return;
+      if (!listings.length) {
+        chrome.runtime.sendMessage({
+          type: 'LISTING_CAPTURE_PROGRESS',
+          siteId: 'housing',
+          status: 'error',
+          current: 0,
+          total: cards.length,
+          message: 'Housing.com listings could not be read from this page.',
+        });
+        return;
+      }
+
+      chrome.runtime.sendMessage({
+        type: 'LISTING_CAPTURE_PROGRESS',
+        siteId: 'housing',
+        status: 'complete',
+        current: listings.length,
+        total: cards.length,
+      });
       const data = {
         website: 'Housing.com',
         propertyName: 'Housing.com project listings',
@@ -77,6 +109,14 @@
     if (attempts >= 60) {
       clearInterval(timer);
       console.info('[Property Search Assistant] No supported Housing.com property cards were found.');
+      chrome.runtime.sendMessage({
+        type: 'LISTING_CAPTURE_PROGRESS',
+        siteId: 'housing',
+        status: 'error',
+        current: 0,
+        total: 0,
+        message: 'Housing.com listings were not found on the opened page. Check that it is a results page and try again.',
+      });
     }
   }, 500);
 })();

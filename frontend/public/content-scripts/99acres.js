@@ -80,7 +80,6 @@
       };
 
       if (listing.price || listing.area || listing.ratePerSqFt) {
-        listing.evidence = await globalThis.captureListingEvidence(card);
         listings.push(listing);
       }
     }
